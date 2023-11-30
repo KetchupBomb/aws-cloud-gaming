@@ -79,24 +79,26 @@ resource "aws_security_group" "default" {
   }
 }
 
+locals {
+  port_forwardings = { for key, val in local.ports : key => val if var.firewall_rules[key] }
+}
 # Allow inbound connections from the local IP
 resource "aws_security_group_rule" "ingress" {
   for_each = {
-    for port in flatten(
-      [
-        for app, protocols in local.ports : [
-          for protocol, ports in protocols : [
-            for port in ports : {
-              name        = join("_", [app, protocol, port.port]),
-              app         = app,
-              protocol    = protocol,
-              port        = port.port,
-              description = port.description
-            }
-          ]
+    for port in flatten([
+      for app, protocols in local.port_forwardings : [
+        for protocol, ports in protocols : [
+          for port in ports :
+          {
+            name        = join("_", [app, protocol, port.port]),
+            app         = app,
+            protocol    = protocol,
+            port        = port.port,
+            description = port.description
+          }
         ]
       ]
-    ) : join("_", [port.app, port.protocol, port.port]) => port
+    ]) : join("_", [port.app, port.protocol, port.port]) => port
   }
   type              = "ingress"
   description       = each.value.description
@@ -117,7 +119,7 @@ resource "aws_security_group_rule" "egress" {
   security_group_id = aws_security_group.default.id
 }
 
-resource "aws_iam_role" "windows_instance_role" {
+resource "aws_iam_role" "server_instance_role" {
   name               = "${var.resource_name}-instance-role"
   assume_role_policy = <<EOF
 {
@@ -134,7 +136,6 @@ resource "aws_iam_role" "windows_instance_role" {
   ]
 }
 EOF
-
   tags = {
     App = "aws-cloud-gaming"
   }
@@ -161,21 +162,21 @@ data "aws_iam_policy" "driver_get_object_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "password_get_parameter_policy_attachment" {
-  role       = aws_iam_role.windows_instance_role.name
+  role       = aws_iam_role.server_instance_role.name
   policy_arn = aws_iam_policy.password_get_parameter_policy.arn
 }
 
 resource "aws_iam_role_policy_attachment" "driver_get_object_policy_attachment" {
-  role       = aws_iam_role.windows_instance_role.name
+  role       = aws_iam_role.server_instance_role.name
   policy_arn = data.aws_iam_policy.driver_get_object_policy.arn
 }
 
-resource "aws_iam_instance_profile" "windows_instance_profile" {
+resource "aws_iam_instance_profile" "server_instance_profile" {
   name = "${var.resource_name}-instance-profile"
-  role = aws_iam_role.windows_instance_role.name
+  role = aws_iam_role.server_instance_role.name
 }
 
-resource "aws_spot_instance_request" "windows_instance" {
+resource "aws_spot_instance_request" "server_instance" {
   instance_type     = var.instance_type
   availability_zone = local.availability_zone
   ami               = (length(var.custom_ami) > 0) ? var.custom_ami : data.aws_ami.windows_ami.image_id
@@ -186,18 +187,14 @@ resource "aws_spot_instance_request" "windows_instance" {
       password_ssm_parameter = aws_ssm_parameter.password.name,
       var = {
         instance_type               = var.instance_type,
-        install_parsec              = var.install_parsec,
-        install_auto_login          = var.install_auto_login,
-        install_graphic_card_driver = var.install_graphic_card_driver,
-        install_steam               = var.install_steam,
-        install_gog_galaxy          = var.install_gog_galaxy,
-        install_origin              = var.install_origin,
-        install_epic_games_launcher = var.install_epic_games_launcher,
-        install_uplay               = var.install_uplay,
+        install_parsec              = var.custom_software.parsec,
+        install_auto_login          = var.custom_software.auto_login,
+        install_graphic_card_driver = var.custom_software.gpu_driver,
+        choco_packages              = var.choco_packages,
       }
     }
   )
-  iam_instance_profile = aws_iam_instance_profile.windows_instance_profile.id
+  iam_instance_profile = aws_iam_instance_profile.server_instance_profile.id
 
   # Spot configuration
   spot_type            = "one-time"
@@ -216,15 +213,15 @@ resource "aws_spot_instance_request" "windows_instance" {
 }
 
 output "instance_id" {
-  value = aws_spot_instance_request.windows_instance.spot_instance_id
+  value = aws_spot_instance_request.server_instance.spot_instance_id
 }
 
 output "instance_ip" {
-  value = aws_spot_instance_request.windows_instance.public_ip
+  value = aws_spot_instance_request.server_instance.public_ip
 }
 
 output "instance_public_dns" {
-  value = aws_spot_instance_request.windows_instance.public_dns
+  value = aws_spot_instance_request.server_instance.public_dns
 }
 
 output "instance_password" {

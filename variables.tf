@@ -39,50 +39,37 @@ variable "skip_install" {
   default     = false
 }
 
-variable "install_parsec" {
-  description = "Download and run Parsec-Cloud-Preparation-Tool on first login"
-  type        = bool
-  default     = true
+variable "custom_software" {
+  description = "Download and install software on first login"
+  type        = object({
+    parsec = bool
+    auto_login = bool
+    gpu_driver = bool
+  })
+  default     = {
+    parsec = true
+    auto_login = true
+    gpu_driver = true
+  }
 }
 
-variable "install_auto_login" {
-  description = "Configure auto-login on first boot"
-  type        = bool
-  default     = true
+variable "firewall_rules" {
+  description = "Specify which firewall rules to apply"
+  type        = object({
+    rdp = bool
+    vnc = bool
+    sunshine = bool
+  })
+  default     = {
+    rdp = true
+    vnc = false
+    sunshine = false
+  }
 }
 
-variable "install_graphic_card_driver" {
-  description = "Download and install the Nvidia driver on first boot"
-  type        = bool
-  default     = true
-}
-
-variable "install_steam" {
-  description = "Download and install Valve Steam on first boot"
-  type        = bool
-  default     = true
-}
-
-variable "install_gog_galaxy" {
-  description = "Download and install GOG Galaxy on first boot"
-  type        = bool
-  default     = false
-}
-
-variable "install_uplay" {
-  description = "Download and install Ubisoft Uplay on first boot"
-  type        = bool
-  default     = false
-}
-
-variable "install_origin" {
-  description = "Download and install EA Origin on first boot"
-  type        = bool
-  default     = false
-}
-
-variable "install_epic_games_launcher" {
-  description = "Download and install EPIC Games Launcher on first boot"
-  type        = bool
-  default     = false
+variable "choco_packages" {
+  description = "Download and install choco packages on first login"
+  type        = list(string)
+  default     = ["steam"]
+  #"steam", "goggalaxy", "uplay", "origin", "epicgameslauncher"
 }
